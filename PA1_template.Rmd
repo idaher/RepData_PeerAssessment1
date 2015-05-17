@@ -5,21 +5,79 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
-
+The first step is to load in the data, and make sure the date column in represented as a date. The column names of this data frame are "steps", "date", and "interval". The code chunk below will show the first few lines of data.
+```{r, echo=TRUE}
+data <- read.csv("activity.csv")
+data[,2] <- as.Date(data[,2])
+head(data)
+```
 
 ## What is mean total number of steps taken per day?
 
+First we want to find the total nuber of steps taken each day: 
+```{r, echo=TRUE}
+library(plyr)
+stepsPerDay <-ddply(data, "date", numcolwise(sum),na.rm=TRUE)[,-3]
+stepsPerDay
+```
 
+Next, produce a histogram of this activity:
+```{r, echo=TRUE}
+library(ggplot2)
+qplot(steps,data=stepsPerDay,binwidth = 500,geom="histogram",main="Histogram of daily steps")
+```
+```{r, echo=TRUE}
+meanSteps <- mean(stepsPerDay[,2])
+medianSteps <- median(stepsPerDay[,2])
+```
+The mean number of steps per day is `r meanSteps`. The median number of steps per day is `r medianSteps`.
 
 ## What is the average daily activity pattern?
 
+Next we want to look at the average number of steps for each interval across all days.
+``` {r, echo=TRUE}
+stepsPerInterval <- ddply(data, "interval", numcolwise(mean),na.rm=TRUE)
+qplot(y=steps,x=interval, data=stepsPerInterval, geom="path", main="Time series of daily average number of steps at different time intervals")
+```
 
+```{r, echo=TRUE}
+maxInterval <- stepsPerInterval[which(stepsPerInterval[,2]==max(stepsPerInterval[,2])),1]
+```
+
+The time interval with the maximum average number of steps across all days is `r maxInterval`.
 
 ## Imputing missing values
 
-
+```{r, echo=TRUE}
+missing <- sum(is.na(data[,1]))
+```
+There are a total of `r missing` missing values in the data set. We will fill in all missing data with the mean value for that time interval, and examine the effect.
+```{r, echo=TRUE}
+dataReplaced <- data
+for (i in 1:dim(dataReplaced)[1]){
+  if (is.na(dataReplaced[i,1])) {
+    dataReplaced[i,1] <- stepsPerInterval[which(stepsPerInterval$interval==dataReplaced[i,3]),1]
+  }
+}
+```
+Below is a histogram of the new data set with missing values filled in:
+```{r echo=TRUE}
+stepsPerDayReplaced <-ddply(dataReplaced, "date", numcolwise(sum),na.rm=TRUE)[,-3]
+qplot(steps,data=stepsPerDayReplaced,binwidth = 500,geom="histogram",main="Histogram of daily steps with missing data replaced")
+maxReplaced <- max(stepsPerDayReplaced$steps)
+meanReplaced <- mean(stepsPerDayReplaced$steps)
+medianReplaced <- median(stepsPerDayReplaced$steps)
+```
+The new mean number of steps per day is `r meanReplaced`. The new median is `r medianReplaced`. These are both higher than the values from the data set with missing values. The most obvious effect of replacing the missing values was that all the days with entirely missing data showed up on the histogram with a much higher count than any other number of steps (`r maxReplaced`), which was the sum of all the replaced NAs.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+The following plot shows the daily average number of steps over the time intervals for weekends versus weekdays.
+```{r, echo=TRUE}
+day <- function(x) {ifelse(weekdays(x)=="Saturday"|weekdays(x)=="Sunday","weekend","weekday")}
+dataReplaced$day <- sapply(dataReplaced$date,day)
+averages <- ddply(dataReplaced, .(interval,day), numcolwise(mean))
+library(lattice)
+xyplot(steps~interval|day,data=averages,type='l')
+```
